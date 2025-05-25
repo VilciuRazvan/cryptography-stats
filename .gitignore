@@ -1,2 +1,10 @@
-/certificates
 *.xlsx
+*node_modules
+__pycache__/
+*.pyc
+*.crt
+*.key
+*.jks
+*.p12
+/certificates
+*.srl
