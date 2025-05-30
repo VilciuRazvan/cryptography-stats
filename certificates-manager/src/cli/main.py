@@ -3,6 +3,7 @@ from ..utils.user_input import get_user_choice, get_password_with_confirmation
 from ..generators.key_generator import generate_key, parse_curves
 from ..generators.cert_generator import generate_ca_certificate, generate_signed_certificate
 from ..generators.store_generator import generate_pkcs12_file, create_server_keystore, create_truststore
+from ..utils.thingsboard_device import ThingsboardDeviceManager
 import os
 import shutil
 
@@ -166,4 +167,20 @@ def cli_main():
             print(f"  Server Keystore JKS: {server_keystore_fn}")
         if os.path.exists(os.path.join(output_dir_name, truststore_fn)):
             print(f"  Server Truststore JKS: {truststore_fn}")
+
+    # After successful certificate generation
+    create_tb_device = get_user_choice("\nDo you want to create a ThingsBoard device with the generated certificate? (yes/no)", ["yes", "no"])
+    
+    if create_tb_device == "yes":
+        print("\n--- ThingsBoard Device Creation ---")
+        device_cert_path = os.path.join(output_dir_name, device_cert_fn)
+        print(f"Using device certificate: {device_cert_path}")
+        tb_manager = ThingsboardDeviceManager()
+        if tb_manager.login():
+            tb_manager.create_device_with_certificate(
+                device_name=device_subj_cn or "device001",
+                cert_path=device_cert_path
+            )
+        else:
+            print("Failed to connect to ThingsBoard. Please ensure the server is running.")
 
