@@ -151,32 +151,6 @@ def generate_certificates():
         if os.path.exists(os.path.join(output_dir_name, truststore_fn)):
             print(f"  Server Truststore JKS: {truststore_fn}")
 
-    # After successful certificate generation
-    create_tb_device = get_user_choice("\nDo you want to create a ThingsBoard device with the generated certificate? (yes/no)", ["yes", "no"])
-    
-    if create_tb_device == "yes":
-        print("\n---Profile Creation ---")
-        print("Please ensure you have the ThingsBoard server running and accessible.")
-        ca_cert_path = os.path.join(output_dir_name, ca_cert_fn)
-
-
-        print("\n--- ThingsBoard Device Creation ---")
-        device_cert_path = os.path.join(output_dir_name, device_cert_fn)
-        print(f"Using device certificate: {device_cert_path}")
-        tb_manager = ThingsboardDeviceManager()
-        if tb_manager.login():
-            tb_manager.create_profile_with_certificate("Test profile via script", ca_cert_path)
-
-            device_id = tb_manager.create_device_with_profile(
-                device_name=device_subj_cn or "device001",
-                profile_name="Test profile via script",
-            )
-
-            device_credentials = tb_manager.get_device_credentials(device_id=device_id)
-
-            tb_manager.post_modify_device_credentials(credentials=device_credentials, device_id=device_id, cert_path=device_cert_path)
-        else:
-            print("Failed to connect to ThingsBoard. Please ensure the server is running.")
 
 def apply_certificates():
     """Handle applying certificates to services"""
@@ -244,6 +218,68 @@ def apply_certificates():
     except Exception as e:
         print(f"\nError applying certificates: {str(e)}")
 
+def create_thingsboard_device():
+    """Handle ThingsBoard device creation with existing certificates"""
+    print("\n=== ThingsBoard Device Creation ===")
+    
+    # 1. Find certificate directories
+    print("\nLooking for certificate directories...")
+    cert_dirs = [d for d in os.listdir('.') if os.path.isdir(d)]
+    if not cert_dirs:
+        print("No certificate directories found in current location.")
+        return
+        
+    cert_dir = get_user_choice("\nSelect certificate directory:", cert_dirs)
+    if not cert_dir:
+        return
+
+    # 2. Check if required files exist
+    ca_cert_path = os.path.join(cert_dir, "ca.crt")
+    device_cert_path = os.path.join(cert_dir, "device1.crt")
+    
+    if not os.path.exists(device_cert_path) or not os.path.exists(ca_cert_path):
+        print("Error: Required certificate files not found in selected directory.")
+        print(f"Looking for:\n  {ca_cert_path}\n  {device_cert_path}")
+        return
+
+    # 3. Get device name from user
+    device_name = get_user_choice("\nEnter device name (e.g., device001):", [], allow_manual_entry=True)
+    if not device_name:
+        device_name = "device001"  # Default name if none provided
+
+    # 4. Create device in ThingsBoard
+    print("\nAttempting to connect to ThingsBoard...")
+    tb_manager = ThingsboardDeviceManager()
+    if tb_manager.login():
+        print("\n--- Creating Device Profile ---")
+        profile_name = f"Profile_{device_name}"
+        tb_manager.create_profile_with_certificate(profile_name, ca_cert_path)
+
+        print(f"\n--- Creating Device: {device_name} ---")
+        device_id = tb_manager.create_device_with_profile(
+            device_name=device_name,
+            profile_name=profile_name
+        )
+
+        if device_id:
+            print("\n--- Updating Device Credentials ---")
+            device_credentials = tb_manager.get_device_credentials(device_id=device_id)
+            if device_credentials:
+                if tb_manager.post_modify_device_credentials(
+                    credentials=device_credentials,
+                    device_id=device_id,
+                    cert_path=device_cert_path
+                ):
+                    print(f"\nSuccessfully created and configured device '{device_name}'")
+                else:
+                    print("Failed to update device credentials")
+            else:
+                print("Failed to get device credentials")
+    else:
+        print("Failed to connect to ThingsBoard. Please ensure the server is running.")
+
+
+
 def run_performance_tests():
     """Handle performance testing"""
     print("\n=== Performance Tests ===")
@@ -280,9 +316,9 @@ def cli_main():
             elif choice_num == 2:
                 apply_certificates()
             elif choice_num == 3:
-                run_performance_tests()
+                create_thingsboard_device()
             elif choice_num == 4:
-                print("\nFeature not implemented yet")
+                run_performance_tests()
             elif choice_num == 5:
                 print("\nExiting...")
                 sys.exit(0)
