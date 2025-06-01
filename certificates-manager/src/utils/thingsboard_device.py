@@ -187,3 +187,27 @@ class ThingsboardDeviceManager:
         except requests.exceptions.RequestException as e:
             print(f"Failed to modify device credentials: {str(e)}")
             return False
+
+    def check_connection(self) -> bool:
+        """Check if we can connect to ThingsBoard and login"""
+        print("\nChecking ThingsBoard connection...")
+        
+        try:
+            if self.login():
+                user_url = f"{self.base_url}/auth/user"
+                response = requests.get(user_url, headers=self.headers)
+                response.raise_for_status()
+                
+                user_info = response.json()
+                print("\nConnection successful!")
+                print(f"Connected as: {user_info.get('firstName', 'Unknown')} {user_info.get('lastName', '')}")
+                print(f"Authority: {user_info.get('authority', 'Unknown')}")
+                return True
+                
+        except requests.exceptions.ConnectionError:
+            print("Failed to connect to ThingsBoard server")
+            print(f"Make sure ThingsBoard is running at {self.base_url}")
+        except requests.exceptions.RequestException as e:
+            print(f"Error checking connection: {str(e)}")
+        
+        return False

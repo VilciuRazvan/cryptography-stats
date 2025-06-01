@@ -278,7 +278,15 @@ def create_thingsboard_device():
     else:
         print("Failed to connect to ThingsBoard. Please ensure the server is running.")
 
-
+def check_thingsboard_connection():
+    """Check if ThingsBoard server is accessible"""
+    print("\n=== ThingsBoard Connection Check ===")
+    
+    tb_manager = ThingsboardDeviceManager()
+    if tb_manager.check_connection():
+        print("ThingsBoard server is up and running")
+    else:
+        print("Could not connect to ThingsBoard server")
 
 def run_performance_tests():
     """Handle performance testing"""
@@ -295,6 +303,7 @@ def cli_main():
         options = [
             "Generate certificates",
             "Apply generated certificates (requires admin rights)",
+            "Check ThingsBoard connection",
             "Create ThingsBoard device with generated certificate",
             "Run performance tests",
             "Exit"
@@ -316,14 +325,16 @@ def cli_main():
             elif choice_num == 2:
                 apply_certificates()
             elif choice_num == 3:
-                create_thingsboard_device()
+                check_thingsboard_connection()
             elif choice_num == 4:
-                run_performance_tests()
+                create_thingsboard_device()
             elif choice_num == 5:
+                run_performance_tests()
+            elif choice_num == 6:
                 print("\nExiting...")
                 sys.exit(0)
             else:
-                print("\nInvalid choice. Please enter a number between 1 and 4.")
+                print("\nInvalid choice. Please enter a number between 1 and 6.")
         except ValueError:
             print("\nInvalid input. Please enter a number.")
 
