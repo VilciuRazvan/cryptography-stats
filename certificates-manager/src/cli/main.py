@@ -6,16 +6,14 @@ from ..generators.store_generator import generate_pkcs12_file, create_server_key
 from ..utils.thingsboard_device import ThingsboardDeviceManager
 import os
 import shutil
+import sys
 
-def cli_main():
-    """
-    Main CLI function to guide user through certificate generation.
-    """
-    print("--- OpenSSL & Keytool Certificate Generation Utility ---")
-
+def generate_certificates():
+    """Handle the certificate generation workflow"""
+    print("\n=== Certificate Generation ===")
+    
     if not check_tool_version("openssl"): return
     if not check_tool_version("keytool"): return
-
 
     alg_options = ["EC", "RSA"]
     alg_choice = get_user_choice("\nChoose certificate generation algorithm:", alg_options)
@@ -177,4 +175,52 @@ def cli_main():
             tb_manager.post_modify_device_credentials(credentials=device_credentials, device_id=device_id, cert_path=device_cert_path)
         else:
             print("Failed to connect to ThingsBoard. Please ensure the server is running.")
+
+def apply_certificates():
+    """Handle applying certificates to services"""
+    print("\n=== Apply Certificates ===")
+    print("Feature not implemented yet")
+
+def run_performance_tests():
+    """Handle performance testing"""
+    print("\n=== Performance Tests ===")
+    print("Feature not implemented yet")
+
+def cli_main():
+    """
+    Main CLI function with menu-driven interface.
+    """
+    while True:
+        print("\n=== Certificate Management Utility ===")
+        options = [
+            "Generate certificates",
+            "Apply latest generated certificates",
+            "Run performance tests",
+            "Exit"
+        ]
+        
+        print("\nChoose your next action:")
+        for i, option in enumerate(options, 1):
+            print(f"{i}. {option}")
+        
+        choice = get_user_choice("", [], allow_manual_entry=True)
+        
+        if not choice:
+            continue
+            
+        try:
+            choice_num = int(choice)
+            if choice_num == 1:
+                generate_certificates()
+            elif choice_num == 2:
+                apply_certificates()
+            elif choice_num == 3:
+                run_performance_tests()
+            elif choice_num == 4:
+                print("\nExiting...")
+                sys.exit(0)
+            else:
+                print("\nInvalid choice. Please enter a number between 1 and 4.")
+        except ValueError:
+            print("\nInvalid input. Please enter a number.")
 
