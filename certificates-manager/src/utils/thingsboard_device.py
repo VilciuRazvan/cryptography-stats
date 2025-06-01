@@ -145,3 +145,45 @@ class ThingsboardDeviceManager:
         except requests.exceptions.RequestException as e:
             print(f"Failed to retrieve device credentials: {str(e)}")
             return None
+
+    def post_modify_device_credentials(self, credentials: dict, device_id: str, cert_path: str) -> bool:
+        """Modify device credentials by ID to use device certificate"""
+        if not self.auth_token:
+            print("Not logged in. Please login first.")
+            return False
+        
+        if not os.path.exists(cert_path):
+            print(f"Certificate file not found: {cert_path}")
+            return False
+        
+        cert_content = None
+        try:
+            with open(cert_path, 'r') as cert_file:
+                cert_content = cert_file.read().strip()
+        except Exception as e:
+            print(f"Failed to read certificate file: {str(e)}")
+            return False
+        
+        print(f"Attempting to modify device credentials for device ID {device_id}...")
+        request_body = {
+            "id": {
+                "id": credentials.get("id")
+            },
+            "deviceId": {
+                "entityType": "DEVICE",
+                "id": device_id
+            },
+            "credentialsType": "X509_CERTIFICATE",
+            "credentialsId": credentials.get("credentialsId"),
+            "credentialsValue": cert_content
+        }
+
+        try:
+            modify_url = f"{self.base_url}/device/credentials"
+            response = requests.post(modify_url, headers=self.headers, json=request_body)
+            response.raise_for_status()
+            print(f"Device credentials for ID {device_id} modified successfully.")
+            return True
+        except requests.exceptions.RequestException as e:
+            print(f"Failed to modify device credentials: {str(e)}")
+            return False

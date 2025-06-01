@@ -173,6 +173,8 @@ def cli_main():
             )
 
             device_credentials = tb_manager.get_device_credentials(device_id=device_id)
+
+            tb_manager.post_modify_device_credentials(credentials=device_credentials, device_id=device_id, cert_path=device_cert_path)
         else:
             print("Failed to connect to ThingsBoard. Please ensure the server is running.")
 
