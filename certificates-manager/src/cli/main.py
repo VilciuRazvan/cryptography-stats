@@ -115,29 +115,12 @@ def cli_main():
 
     if generate_pkcs12_and_jks == "yes":
         print("\n--- PKCS12 and JKS Password Setup ---")
-        while True:
-            p12_password = get_user_choice("Enter password for PKCS12 (server.p12) export", [], allow_manual_entry=True, is_password=True)
-            p12_password_confirm = get_user_choice("Confirm password for PKCS12 export", [], allow_manual_entry=True, is_password=True)
-            if p12_password == p12_password_confirm:
-                if not p12_password: print("Password cannot be empty.")
-                else: break
-            print("Passwords do not match. Please try again.")
+        print("Using default password 'changeit' for all keystores")
         
-        while True:
-            keystore_password = get_user_choice("Enter password for Server Keystore (server_keystore.jks)", [], allow_manual_entry=True, is_password=True)
-            keystore_password_confirm = get_user_choice("Confirm password for Server Keystore", [], allow_manual_entry=True, is_password=True)
-            if keystore_password == keystore_password_confirm:
-                if not keystore_password: print("Password cannot be empty.")
-                else: break
-            print("Passwords do not match. Please try again.")
-
-        while True:
-            truststore_password = get_user_choice("Enter password for Truststore (server_truststore.jks)", [], allow_manual_entry=True, is_password=True)
-            truststore_password_confirm = get_user_choice("Confirm password for Truststore", [], allow_manual_entry=True, is_password=True)
-            if truststore_password == truststore_password_confirm:
-                if not truststore_password: print("Password cannot be empty.")
-                else: break
-            print("Passwords do not match. Please try again.")
+        # Use default "changeit" password for all stores
+        p12_password = "changeit"
+        keystore_password = "changeit"
+        truststore_password = "changeit"
 
         # Generate PKCS12
         if not generate_pkcs12_file(server_cert_fn, server_key_fn, ca_cert_fn, server_p12_fn, "server", p12_password, output_dir_name):
@@ -172,11 +155,18 @@ def cli_main():
     create_tb_device = get_user_choice("\nDo you want to create a ThingsBoard device with the generated certificate? (yes/no)", ["yes", "no"])
     
     if create_tb_device == "yes":
+        print("\n---Profile Creation ---")
+        print("Please ensure you have the ThingsBoard server running and accessible.")
+        ca_cert_path = os.path.join(output_dir_name, ca_cert_fn)
+
+
         print("\n--- ThingsBoard Device Creation ---")
         device_cert_path = os.path.join(output_dir_name, device_cert_fn)
         print(f"Using device certificate: {device_cert_path}")
         tb_manager = ThingsboardDeviceManager()
         if tb_manager.login():
+            tb_manager.create_profile_with_certificate("Test profile via script", ca_cert_path)
+
             tb_manager.create_device_with_certificate(
                 device_name=device_subj_cn or "device001",
                 cert_path=device_cert_path

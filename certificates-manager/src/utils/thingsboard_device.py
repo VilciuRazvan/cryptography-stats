@@ -40,6 +40,65 @@ class ThingsboardDeviceManager:
                 print(f"Response: {e.response.text}")
             return False
 
+    def create_profile_with_certificate(self, profile_name, cert_path: str) -> any:
+        """Create a device profile and assign X.509 certificate credentials"""
+        if not self.auth_token:
+            print("Not logged in. Please login first.")
+            return False
+
+        try:
+            # 1. Read certificate content
+            if not os.path.exists(cert_path):
+                print(f"Certificate file not found: {cert_path}")
+                return False
+
+            with open(cert_path, 'r') as cert_file:
+                cert_content = cert_file.read().strip()
+
+            # 2. Create device profile
+            create_profile_url = f"{self.base_url}/deviceProfile"
+            profile_data = {
+                "name": profile_name,
+                "type": "DEFAULT",
+                "transportType": "MQTT",
+                "provisionType": "X509_CERTIFICATE_CHAIN",
+                "profileData": {
+                    "transportConfiguration": {
+                        "type": "MQTT",
+                        "@type": "MqttDeviceProfileTransportConfiguration"
+                    },
+                    "provisionConfiguration": {
+                        "type": "X509_CERTIFICATE_CHAIN",
+                        "@type": "X509CertificateChainProvisionConfiguration",
+                        "provisionDeviceSecret": cert_content,
+                        "certificateRegExPattern": "CN=(.*?)(?:,|$)",
+                        "allowCreateNewDevicesByX509Certificate": True
+                    }
+                }
+            }
+            print(f"Attempting to create device profile '{profile_name}'...")
+            response = requests.post(
+                create_profile_url,
+                headers=self.headers,
+                json=profile_data
+            )
+            response.raise_for_status()  # Will raise an error for HTTP errors
+
+            profile = response.json()
+            print(f"Device profile '{profile_name}' created with ID: {profile['id']['id']}")
+            return profile
+
+        except requests.exceptions.RequestException as e:
+            error_msg = str(e)
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_data = e.response.json()
+                    error_msg = error_data.get('message', str(e))
+                except json.JSONDecodeError:
+                    error_msg = e.response.text
+            print(f"Failed to create device profile: {error_msg}")
+            return False
+
     def create_device_with_certificate(self, device_name: str, cert_path: str) -> bool:
         """Create a device and assign X.509 certificate credentials"""
         if not self.auth_token:

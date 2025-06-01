@@ -1,11 +1,16 @@
 import getpass
 
-def get_user_choice(prompt, options, allow_manual_entry=False, is_password=False):
+def get_user_choice(prompt, options, allow_manual_entry=False, is_password=False, default_password=None):
     """
     Prompts the user to choose from a list of options or enter text/password.
+    Added default_password parameter for JKS generation.
     """
     if not is_password:
         print(prompt)
+    
+    # If a default password is provided and this is a password prompt, use it
+    if is_password and default_password is not None:
+        return default_password
     
     if options:
         for i, option_display in enumerate(options):
