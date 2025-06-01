@@ -167,10 +167,12 @@ def cli_main():
         if tb_manager.login():
             tb_manager.create_profile_with_certificate("Test profile via script", ca_cert_path)
 
-            tb_manager.create_device_with_certificate(
+            device_id = tb_manager.create_device_with_profile(
                 device_name=device_subj_cn or "device001",
-                cert_path=device_cert_path
+                profile_name="Test profile via script",
             )
+
+            device_credentials = tb_manager.get_device_credentials(device_id=device_id)
         else:
             print("Failed to connect to ThingsBoard. Please ensure the server is running.")
 
