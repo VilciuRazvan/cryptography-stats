@@ -8,6 +8,8 @@ import os
 import shutil
 import sys
 
+THINGSBOARD_CONF_PATH = "C:\\Program Files\\Thingsboard\\thingsboard\\conf\\certs\\test"
+
 def generate_certificates():
     """Handle the certificate generation workflow"""
     print("\n=== Certificate Generation ===")
@@ -179,7 +181,68 @@ def generate_certificates():
 def apply_certificates():
     """Handle applying certificates to services"""
     print("\n=== Apply Certificates ===")
-    print("Feature not implemented yet")
+    
+    try:
+        # Check if we have admin rights
+        import ctypes
+        if not ctypes.windll.shell32.IsUserAnAdmin():
+            print("Error: This operation requires administrator privileges.")
+            print("Please run the application as administrator.")
+            return
+
+        # 1. Select the certificates directory
+        print("\nLooking for certificate directories...")
+        cert_dirs = [d for d in os.listdir('.') if os.path.isdir(d)]
+        if not cert_dirs:
+            print("No certificate directories found in current location.")
+            return
+            
+        cert_dir = get_user_choice("\nSelect certificate directory:", cert_dirs)
+        if not cert_dir:
+            return
+
+        # Check if required files exist
+        keystore_path = os.path.join(cert_dir, "server_keystore.jks")
+        truststore_path = os.path.join(cert_dir, "server_truststore.jks")
+        
+        if not os.path.exists(keystore_path) or not os.path.exists(truststore_path):
+            print("Error: Required JKS files not found in selected directory.")
+            print(f"Looking for:\n  {keystore_path}\n  {truststore_path}")
+            return
+
+        # 2. Stop ThingsBoard service
+        print("\nStopping ThingsBoard service...")
+        stop_result = os.system('net stop thingsboard')
+        if stop_result != 0:
+            print("Failed to stop ThingsBoard service. Is it running?")
+            # Continue anyway as files might be copyable
+
+        # 3. Copy files
+        print("\nCopying certificate files...")
+        try:
+            # Ensure target directory exists
+            os.makedirs(THINGSBOARD_CONF_PATH, exist_ok=True)
+            
+            # Copy files with overwrite
+            shutil.copy2(keystore_path, os.path.join(THINGSBOARD_CONF_PATH, "server_keystore.jks"))
+            shutil.copy2(truststore_path, os.path.join(THINGSBOARD_CONF_PATH, "server_truststore.jks"))
+            print("Certificate files copied successfully.")
+        except Exception as e:
+            print(f"Error copying files: {str(e)}")
+            return
+
+        # 4. Start ThingsBoard service
+        print("\nStarting ThingsBoard service...")
+        start_result = os.system('net start thingsboard')
+        if start_result != 0:
+            print("Failed to start ThingsBoard service.")
+            return
+
+        print("\nCertificates applied successfully!")
+        print("ThingsBoard service restarted.")
+
+    except Exception as e:
+        print(f"\nError applying certificates: {str(e)}")
 
 def run_performance_tests():
     """Handle performance testing"""
@@ -192,9 +255,11 @@ def cli_main():
     """
     while True:
         print("\n=== Certificate Management Utility ===")
+        print("Note: Some operations require administrator privileges.")
         options = [
             "Generate certificates",
-            "Apply latest generated certificates",
+            "Apply generated certificates (requires admin rights)",
+            "Create ThingsBoard device with generated certificate",
             "Run performance tests",
             "Exit"
         ]
@@ -217,6 +282,8 @@ def cli_main():
             elif choice_num == 3:
                 run_performance_tests()
             elif choice_num == 4:
+                print("\nFeature not implemented yet")
+            elif choice_num == 5:
                 print("\nExiting...")
                 sys.exit(0)
             else:
