@@ -290,8 +290,13 @@ def check_thingsboard_connection():
 
 def run_performance_tests():
     """Handle performance testing"""
-    print("\n=== Performance Tests ===")
-    print("Feature not implemented yet")
+    from ..utils.performance_tester import PerformanceTest
+    
+    tester = PerformanceTest()
+    if tester.setup_test():
+        tester.run_test()
+    else:
+        print("Performance test setup failed.")
 
 def cli_main():
     """

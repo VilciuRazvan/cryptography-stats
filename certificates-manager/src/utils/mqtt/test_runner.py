@@ -3,12 +3,26 @@ import ssl
 import time
 import json
 import threading
-import numpy as np # For statistics
-import pandas as pd # For Excel export
+import numpy as np
+import pandas as pd
 import warnings
-import os # To check if file exists
-from config import *
-from excel_handler import export_results_to_excel
+import os
+from dataclasses import dataclass
+from typing import Dict, Optional
+
+@dataclass
+class MqttTestConfig:
+    """Configuration for MQTT test"""
+    host: str
+    port: int
+    tls: bool
+    ca_certs: str
+    certfile: str
+    keyfile: str
+    ciphers: Optional[str] = None
+    clientId: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
 
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 
@@ -322,7 +336,7 @@ if __name__ == "__main__":
 
         for i in range(1, NUM_ITERATIONS + 1):
             print(f"--- Iteration {i}/{NUM_ITERATIONS} ({config_name}) ---")
-            run_state = run_mqtt_test(i, config_name, config_params)
+            run_state = run_mqtt_test(i, config_name, run_config)
             iteration_data = run_state.get_results_dict()
             iteration_results.append(iteration_data)
 
