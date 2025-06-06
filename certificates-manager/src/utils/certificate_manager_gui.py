@@ -540,6 +540,90 @@ class CertificateManagerGUI:
             self.apply_progress_var.set("Operation failed!")
 
     def create_device(self):
-        """Handle device creation"""
-        # Add device creation logic here
-        pass
+        """Handle device creation workflow"""
+        # 1. Validate inputs
+        cert_dir = self.device_cert_dir.get()
+        if not cert_dir:
+            messagebox.showerror("Error", "Please select a certificate directory")
+            return
+
+        # Check required files
+        ca_cert_path = os.path.join(cert_dir, "ca.crt")
+        device_cert_path = os.path.join(cert_dir, "device1.crt")
+        
+        if not os.path.exists(device_cert_path) or not os.path.exists(ca_cert_path):
+            messagebox.showerror(
+                "Files Not Found",
+                f"Required certificate files not found in selected directory:\n"
+                f"  {ca_cert_path}\n"
+                f"  {device_cert_path}"
+            )
+            return
+
+        # 2. Get device name
+        device_name = self.device_name.get()
+        if not device_name:
+            device_name = "device001"  # Default name if empty
+        
+        # 3. Start device creation process
+        self.device_progress_var.set("Connecting to ThingsBoard...")
+        self.root.update()
+
+        try:
+            tb_manager = ThingsboardDeviceManager()
+            if not tb_manager.login():
+                messagebox.showerror(
+                    "Connection Error",
+                    "Failed to connect to ThingsBoard.\nPlease ensure the server is running."
+                )
+                self.device_progress_var.set("Connection failed")
+                return
+
+            # Create device profile
+            self.device_progress_var.set("Creating device profile...")
+            self.root.update()
+            
+            profile_name = f"Profile_{device_name}"
+            profile = tb_manager.create_profile_with_certificate(profile_name, ca_cert_path)
+            if not profile:
+                raise Exception("Failed to create device profile")
+
+            # Create device
+            self.device_progress_var.set("Creating device...")
+            self.root.update()
+            
+            device_id = tb_manager.create_device_with_profile(
+                device_name=device_name,
+                profile_name=profile_name
+            )
+            if not device_id:
+                raise Exception("Failed to create device")
+
+            # Update device credentials
+            self.device_progress_var.set("Updating device credentials...")
+            self.root.update()
+            
+            device_credentials = tb_manager.get_device_credentials(device_id=device_id)
+            if not device_credentials:
+                raise Exception("Failed to get device credentials")
+
+            if not tb_manager.post_modify_device_credentials(
+                credentials=device_credentials,
+                device_id=device_id,
+                cert_path=device_cert_path
+            ):
+                raise Exception("Failed to update device credentials")
+
+            # Success
+            self.device_progress_var.set("Device created successfully!")
+            messagebox.showinfo(
+                "Success",
+                f"Successfully created and configured device '{device_name}'\n\n"
+                f"Profile: {profile_name}\n"
+                f"Device ID: {device_id}\n"
+                f"Certificate: {os.path.basename(device_cert_path)}"
+            )
+
+        except Exception as e:
+            self.device_progress_var.set("Device creation failed!")
+            messagebox.showerror("Error", str(e))
