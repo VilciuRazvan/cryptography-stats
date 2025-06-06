@@ -12,6 +12,8 @@ import os
 import shutil
 import ctypes
 
+THINGSBOARD_CONF_PATH = "C:\\Program Files\\Thingsboard\\thingsboard\\conf\\certs\\test"
+
 class CertificateManagerGUI:
     def __init__(self, root):
         self.root = root
@@ -454,9 +456,88 @@ class CertificateManagerGUI:
         return True
 
     def apply_certificates(self):
-        """Handle applying certificates"""
-        # Add certificate application logic here
-        pass
+        """Handle applying certificates to services"""
+        # Check admin rights
+        if not ctypes.windll.shell32.IsUserAnAdmin():
+            messagebox.showerror(
+                "Administrator Rights Required", 
+                "This operation requires administrator privileges.\nPlease run the application as administrator."
+            )
+            return
+
+        # Validate certificate directory
+        cert_dir = self.cert_dir.get()
+        if not cert_dir:
+            messagebox.showerror("Error", "Please select a certificate directory")
+            return
+
+        # Check required files
+        keystore_path = os.path.join(cert_dir, "server_keystore.jks")
+        truststore_path = os.path.join(cert_dir, "server_truststore.jks")
+        
+        if not os.path.exists(keystore_path) or not os.path.exists(truststore_path):
+            messagebox.showerror(
+                "Files Not Found", 
+                f"Required JKS files not found in selected directory:\n"
+                f"  {keystore_path}\n"
+                f"  {truststore_path}"
+            )
+            return
+
+        try:
+            # Update progress
+            self.apply_progress_var.set("Stopping ThingsBoard service...")
+            self.root.update()
+
+            # Stop ThingsBoard
+            stop_result = os.system('net stop thingsboard')
+            if stop_result != 0:
+                if not messagebox.askyesno(
+                    "Service Stop Failed",
+                    "Failed to stop ThingsBoard service. Continue anyway?\n"
+                    "Files might still be copyable if service is not running."
+                ):
+                    return
+
+            # Copy files
+            self.apply_progress_var.set("Copying certificate files...")
+            self.root.update()
+
+            try:
+                # Ensure target directory exists
+                os.makedirs(THINGSBOARD_CONF_PATH, exist_ok=True)
+                
+                # Copy files with overwrite
+                shutil.copy2(keystore_path, os.path.join(THINGSBOARD_CONF_PATH, "server_keystore.jks"))
+                shutil.copy2(truststore_path, os.path.join(THINGSBOARD_CONF_PATH, "server_truststore.jks"))
+                
+            except Exception as e:
+                messagebox.showerror("Copy Error", f"Error copying files: {str(e)}")
+                return
+
+            # Start ThingsBoard
+            self.apply_progress_var.set("Starting ThingsBoard service...")
+            self.root.update()
+
+            start_result = os.system('net start thingsboard')
+            if start_result != 0:
+                messagebox.showerror(
+                    "Service Start Failed",
+                    "Failed to start ThingsBoard service.\n"
+                    "Please start it manually from Services."
+                )
+                return
+
+            # Success
+            self.apply_progress_var.set("Certificates applied successfully!")
+            messagebox.showinfo(
+                "Success", 
+                "Certificates applied successfully!\nThingsBoard service restarted. Please wait up to a minute for it to come online."
+            )
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Error applying certificates: {str(e)}")
+            self.apply_progress_var.set("Operation failed!")
 
     def create_device(self):
         """Handle device creation"""
