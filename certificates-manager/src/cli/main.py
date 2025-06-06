@@ -302,44 +302,55 @@ def cli_main():
     """
     Main CLI function with menu-driven interface.
     """
-    while True:
-        print("\n=== Certificate Management Utility ===")
-        print("Note: Some operations require administrator privileges.")
-        options = [
-            "Generate certificates",
-            "Apply generated certificates (requires admin rights)",
-            "Check ThingsBoard connection",
-            "Create ThingsBoard device with generated certificate",
-            "Run performance tests",
-            "Exit"
-        ]
-        
-        print("\nChoose your next action:")
-        for i, option in enumerate(options, 1):
-            print(f"{i}. {option}")
-        
-        choice = get_user_choice("", [], allow_manual_entry=True)
-        
-        if not choice:
-            continue
+    print("\n=== Certificate Management Utility ===")
+    options = ["GUI", "CLI"]
+    choice = get_user_choice("\nSelect interface:", options)
+    
+    if choice == "GUI":
+        import tkinter as tk
+        from ..utils.certificate_manager_gui import CertificateManagerGUI
+        root = tk.Tk()
+        app = CertificateManagerGUI(root)
+        root.mainloop()
+    else:
+        while True:
+            print("\n=== Certificate Management Utility ===")
+            print("Note: Some operations require administrator privileges.")
+            options = [
+                "Generate certificates",
+                "Apply generated certificates (requires admin rights)",
+                "Check ThingsBoard connection",
+                "Create ThingsBoard device with generated certificate",
+                "Run performance tests",
+                "Exit"
+            ]
             
-        try:
-            choice_num = int(choice)
-            if choice_num == 1:
-                generate_certificates()
-            elif choice_num == 2:
-                apply_certificates()
-            elif choice_num == 3:
-                check_thingsboard_connection()
-            elif choice_num == 4:
-                create_thingsboard_device()
-            elif choice_num == 5:
-                run_performance_tests()
-            elif choice_num == 6:
-                print("\nExiting...")
-                sys.exit(0)
-            else:
-                print("\nInvalid choice. Please enter a number between 1 and 6.")
-        except ValueError:
-            print("\nInvalid input. Please enter a number.")
+            print("\nChoose your next action:")
+            for i, option in enumerate(options, 1):
+                print(f"{i}. {option}")
+            
+            choice = get_user_choice("", [], allow_manual_entry=True)
+            
+            if not choice:
+                continue
+                
+            try:
+                choice_num = int(choice)
+                if choice_num == 1:
+                    generate_certificates()
+                elif choice_num == 2:
+                    apply_certificates()
+                elif choice_num == 3:
+                    check_thingsboard_connection()
+                elif choice_num == 4:
+                    create_thingsboard_device()
+                elif choice_num == 5:
+                    run_performance_tests()
+                elif choice_num == 6:
+                    print("\nExiting...")
+                    sys.exit(0)
+                else:
+                    print("\nInvalid choice. Please enter a number between 1 and 6.")
+            except ValueError:
+                print("\nInvalid input. Please enter a number.")
 

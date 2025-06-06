@@ -325,43 +325,43 @@ def calculate_statistics(data_list):
     return stats
 
 
-# --- Main Execution ---
-if __name__ == "__main__":
-    all_run_data = {} # Store detailed results per iteration for each config
+# # --- Main Execution ---
+# if __name__ == "__main__":
+#     all_run_data = {} # Store detailed results per iteration for each config
 
-    # --- Run Test Batches ---
-    for config_name, config_params in test_configs.items():
-        print(f"\n===== Starting Batch: {config_name} =====")
-        iteration_results = [] # Store dicts from get_results_dict for this batch
+#     # --- Run Test Batches ---
+#     for config_name, config_params in test_configs.items():
+#         print(f"\n===== Starting Batch: {config_name} =====")
+#         iteration_results = [] # Store dicts from get_results_dict for this batch
 
-        for i in range(1, NUM_ITERATIONS + 1):
-            print(f"--- Iteration {i}/{NUM_ITERATIONS} ({config_name}) ---")
-            run_state = run_mqtt_test(i, config_name, run_config)
-            iteration_data = run_state.get_results_dict()
-            iteration_results.append(iteration_data)
+#         for i in range(1, NUM_ITERATIONS + 1):
+#             print(f"--- Iteration {i}/{NUM_ITERATIONS} ({config_name}) ---")
+#             run_state = run_mqtt_test(i, config_name, run_config)
+#             iteration_data = run_state.get_results_dict()
+#             iteration_results.append(iteration_data)
 
-            if iteration_data.get("error"):
-                 print(f"  Iteration {i} failed or incomplete. Error: {iteration_data['error']}")
-            else:
-                 # Optional: print iteration timing immediately
-                 print(f"  Iter {i} OK: Handshake={iteration_data['handshake']:.4f}s, PubAck={iteration_data['puback']:.4f}s, Total={iteration_data['total']:.4f}s")
+#             if iteration_data.get("error"):
+#                  print(f"  Iteration {i} failed or incomplete. Error: {iteration_data['error']}")
+#             else:
+#                  # Optional: print iteration timing immediately
+#                  print(f"  Iter {i} OK: Handshake={iteration_data['handshake']:.4f}s, PubAck={iteration_data['puback']:.4f}s, Total={iteration_data['total']:.4f}s")
 
 
-            # Add delay between iterations if testing full handshakes
-            if DELAY_BETWEEN_ITERATIONS > 0 and i < NUM_ITERATIONS: # No delay after last iteration
-                time.sleep(DELAY_BETWEEN_ITERATIONS)
+#             # Add delay between iterations if testing full handshakes
+#             if DELAY_BETWEEN_ITERATIONS > 0 and i < NUM_ITERATIONS: # No delay after last iteration
+#                 time.sleep(DELAY_BETWEEN_ITERATIONS)
 
-        # Store collected iteration results for this batch
-        all_run_data[config_name] = iteration_results
-        print(f"===== Finished Batch: {config_name} =====")
-        # Optional: Add delay/restart prompt between batches
-        # input("Press Enter to start next batch...")
+#         # Store collected iteration results for this batch
+#         all_run_data[config_name] = iteration_results
+#         print(f"===== Finished Batch: {config_name} =====")
+#         # Optional: Add delay/restart prompt between batches
+#         # input("Press Enter to start next batch...")
 
-    all_stats_summary = export_results_to_excel(
-        all_run_data=all_run_data,
-        excel_filename=EXCEL_FILENAME,
-        calculate_statistics=calculate_statistics
-    )
+#     all_stats_summary = export_results_to_excel(
+#         all_run_data=all_run_data,
+#         excel_filename=EXCEL_FILENAME,
+#         calculate_statistics=calculate_statistics
+#     )
 
-    print("\n========= Testing Complete =========")
+#     print("\n========= Testing Complete =========")
 

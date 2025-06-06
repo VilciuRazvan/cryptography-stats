@@ -54,26 +54,26 @@ class PerformanceTest:
 
         # 4. Get test parameters
         iterations = get_user_choice(
-            "\nEnter number of iterations (1-100):", 
+            "\nEnter number of iterations (1-10000):", 
             [], 
             allow_manual_entry=True
         )
         try:
             self.iterations = int(iterations)
-            if not 1 <= self.iterations <= 100:
+            if not 1 <= self.iterations <= 10000:
                 raise ValueError
         except ValueError:
             print("Invalid iteration count. Using default: 1")
             self.iterations = 1
 
         delay = get_user_choice(
-            "\nEnter delay between iterations in seconds (0-10):", 
+            "\nEnter delay between iterations in seconds (0-3600):", 
             [], 
             allow_manual_entry=True
         )
         try:
             self.delay = int(delay)
-            if not 0 <= self.delay <= 10:
+            if not 0 <= self.delay <= 3600:
                 raise ValueError
         except ValueError:
             print("Invalid delay. Using default: 2")
