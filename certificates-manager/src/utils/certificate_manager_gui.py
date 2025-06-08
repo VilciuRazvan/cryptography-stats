@@ -730,6 +730,9 @@ class CertificateManagerGUI:
             messagebox.showerror("Error", "Please select at least one cipher suite")
             return
 
+        # Add cancellation flag
+        self.test_cancelled = False
+        
         # Configure test
         tester = PerformanceTest()
         tester.cert_dir = cert_dir
@@ -738,9 +741,18 @@ class CertificateManagerGUI:
         tester.selected_ciphers = selected_ciphers
         tester.output_file = self.perf_output_var.get()
 
+        # Calculate total number of tests
+        total_tests = len(selected_ciphers) * iterations
+        self.total_tests = total_tests
+        self.completed_tests = 0
+
+        # Reset and configure progress bar
+        self.perf_progress.stop()
+        self.perf_progress['value'] = 0
+        self.perf_progress['maximum'] = total_tests
+
         # Start test in separate thread
-        self.perf_progress_var.set("Test running...")
-        self.perf_progress.start()
+        self.perf_progress_var.set(f"Test running... (0/{total_tests} tests completed)")
         self.test_thread = threading.Thread(
             target=self._run_performance_test_thread,
             args=(tester,),
@@ -751,30 +763,107 @@ class CertificateManagerGUI:
     def _run_performance_test_thread(self, tester):
         """Run performance test in separate thread"""
         try:
-            tester.run_test()
-            self.root.after(0, self._performance_test_completed, tester.output_file)
+            from .mqtt.test_runner import run_mqtt_test, calculate_statistics, MqttTestConfig
+            from .mqtt.excel_handler import export_results_to_excel
+
+            all_run_data = {}
+            
+            # Create test configurations
+            test_configs = {}
+            for cipher in tester.selected_ciphers:
+                config_name = f"Test_{cipher}"
+                config = MqttTestConfig(
+                    host="localhost",
+                    port=8883,
+                    tls=True,
+                    ca_certs=os.path.join(tester.cert_dir, "ca.crt"),
+                    certfile=os.path.join(tester.cert_dir, "device1.crt"),
+                    keyfile=os.path.join(tester.cert_dir, "device1.key"),
+                    ciphers=cipher
+                )
+                test_configs[config_name] = config
+
+            # Run tests for each configuration
+            for config_name, config in test_configs.items():
+                # Check if cancelled
+                if self.test_cancelled:
+                    self.root.after(0, self._performance_test_cancelled)
+                    return
+                
+                iteration_results = []
+                
+                for i in range(1, tester.iterations + 1):
+                    # Check if cancelled
+                    if self.test_cancelled:
+                        self.root.after(0, self._performance_test_cancelled)
+                        return
+                    
+                    # Update progress
+                    self.completed_tests += 1
+                    self.root.after(0, self._update_progress)
+                    
+                    # Run test iteration
+                    run_state = run_mqtt_test(i, config_name, config.__dict__)
+                    iteration_data = run_state.get_results_dict()
+                    iteration_results.append(iteration_data)
+
+                    if tester.delay > 0 and i < tester.iterations:
+                        time.sleep(tester.delay)
+
+                all_run_data[config_name] = iteration_results
+
+            # Export results if not cancelled
+            if not self.test_cancelled:
+                export_results_to_excel(
+                    all_run_data=all_run_data,
+                    excel_filename=tester.output_file,
+                    calculate_statistics=calculate_statistics
+                )
+                self.root.after(0, self._performance_test_completed, tester.output_file)
+            else:
+                self.root.after(0, self._performance_test_cancelled)
+                
         except Exception as e:
-            self.root.after(0, self._performance_test_failed, str(e))
+            if not self.test_cancelled:
+                self.root.after(0, self._performance_test_failed, str(e))
 
-    def _performance_test_completed(self, output_file):
-        """Handle successful test completion"""
-        self.perf_progress.stop()
-        self.perf_progress_var.set("Test completed!")
-        messagebox.showinfo(
-            "Success", 
-            f"Performance test completed!\nResults saved to: {output_file}"
+    def _update_progress(self):
+        """Update the progress bar and status text"""
+        self.perf_progress['value'] = self.completed_tests
+        self.perf_progress_var.set(
+            f"Test running... ({self.completed_tests}/{self.total_tests} tests completed)"
         )
-
-    def _performance_test_failed(self, error):
-        """Handle test failure"""
-        self.perf_progress.stop()
-        self.perf_progress_var.set("Test failed!")
-        messagebox.showerror("Error", f"Test failed: {error}")
 
     def cancel_performance_test(self):
         """Cancel running performance test"""
         if hasattr(self, 'test_thread') and self.test_thread.is_alive():
-            # Note: Proper test cancellation would require modifications to PerformanceTest
+            self.test_cancelled = True
             self.perf_progress.stop()
-            self.perf_progress_var.set("Test cancelled")
-            messagebox.showinfo("Cancelled", "Performance test cancelled")
+            self.perf_progress_var.set("Cancelling test...")
+
+    def _performance_test_cancelled(self):
+        """Called when test is cancelled"""
+        self.perf_progress.stop()
+        self.perf_progress_var.set("Test cancelled")
+        messagebox.showinfo(
+            "Cancelled", 
+            "Performance test cancelled.\nPartial results were not saved."
+        )
+
+    def _performance_test_completed(self, output_file):
+        """Called when performance test completes successfully"""
+        self.perf_progress['value'] = self.total_tests
+        self.perf_progress_var.set("Test completed!")
+        messagebox.showinfo(
+            "Test Complete", 
+            f"Performance test completed successfully!\nResults saved to: {output_file}"
+        )
+
+    def _performance_test_failed(self, error_msg):
+        """Called when performance test fails"""
+        self.perf_progress.stop()
+        self.perf_progress_var.set("Test failed!")
+        messagebox.showerror(
+            "Test Failed", 
+            f"Performance test failed with error:\n{error_msg}"
+        )
