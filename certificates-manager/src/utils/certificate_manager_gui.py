@@ -184,11 +184,73 @@ class CertificateManagerGUI:
         config_frame = ttk.LabelFrame(tab, text="Test Configuration")
         config_frame.pack(fill=tk.X, padx=5, pady=5)
         
-        # Create instance of PerformanceTest for configuration
-        self.perf_tester = PerformanceTest()
+        # Certificate Directory Selection
+        dir_frame = ttk.Frame(config_frame)
+        dir_frame.pack(fill=tk.X, pady=5)
         
-        # Add all the performance test configuration widgets
-        # ... (rest of the performance test GUI code as shown earlier)
+        ttk.Label(dir_frame, text="Certificate Directory:").pack(side=tk.LEFT)
+        self.perf_cert_dir = tk.StringVar()
+        ttk.Entry(dir_frame, textvariable=self.perf_cert_dir).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+        ttk.Button(dir_frame, text="Browse", 
+                  command=lambda: self.browse_directory(self.perf_cert_dir)).pack(side=tk.RIGHT)
+
+        # Test Parameters
+        param_frame = ttk.LabelFrame(config_frame, text="Test Parameters")
+        param_frame.pack(fill=tk.X, pady=5)
+        
+        # Iterations
+        iter_frame = ttk.Frame(param_frame)
+        iter_frame.pack(fill=tk.X, pady=2)
+        ttk.Label(iter_frame, text="Number of iterations:").pack(side=tk.LEFT)
+        self.iterations_var = tk.StringVar(value="100")
+        ttk.Entry(iter_frame, textvariable=self.iterations_var, width=10).pack(side=tk.LEFT, padx=5)
+        ttk.Label(iter_frame, text="(1-10000)").pack(side=tk.LEFT)
+        
+        # Delay
+        delay_frame = ttk.Frame(param_frame)
+        delay_frame.pack(fill=tk.X, pady=2)
+        ttk.Label(delay_frame, text="Delay between iterations (seconds):").pack(side=tk.LEFT)
+        self.delay_var = tk.StringVar(value="2")
+        ttk.Entry(delay_frame, textvariable=self.delay_var, width=10).pack(side=tk.LEFT, padx=5)
+        ttk.Label(delay_frame, text="(0-3600)").pack(side=tk.LEFT)
+        
+        # Cipher Selection
+        cipher_frame = ttk.LabelFrame(tab, text="Cipher Suites")
+        cipher_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+        
+        # Create checkboxes for each cipher
+        self.cipher_vars = {}
+        for cipher, description in PerformanceTest.AVAILABLE_CIPHERS.items():
+            var = tk.BooleanVar(value=True)
+            self.cipher_vars[cipher] = var
+            tk.Checkbutton(
+                cipher_frame, 
+                text=f"{cipher}\n({description})", 
+                variable=var,
+                wraplength=400
+            ).pack(anchor=tk.W, padx=5, pady=2)
+        
+        # Output File
+        output_frame = ttk.Frame(tab)
+        output_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(output_frame, text="Output Excel File:").pack(side=tk.LEFT)
+        self.perf_output_var = tk.StringVar(value="performance_results.xlsx")
+        ttk.Entry(output_frame, textvariable=self.perf_output_var).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+        
+        # Control buttons
+        button_frame = ttk.Frame(tab)
+        button_frame.pack(fill=tk.X, pady=10)
+        
+        ttk.Button(button_frame, text="Start Test", 
+                   command=self.run_performance_test).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Cancel Test", 
+                   command=self.cancel_performance_test).pack(side=tk.LEFT, padx=5)
+        
+        # Progress
+        self.perf_progress_var = tk.StringVar(value="Ready")
+        ttk.Label(tab, textvariable=self.perf_progress_var).pack()
+        self.perf_progress = ttk.Progressbar(tab, mode='determinate')
+        self.perf_progress.pack(fill=tk.X, padx=5, pady=5)
 
     def update_key_options(self):
         """Update key options based on selected algorithm"""
@@ -627,3 +689,92 @@ class CertificateManagerGUI:
         except Exception as e:
             self.device_progress_var.set("Device creation failed!")
             messagebox.showerror("Error", str(e))
+
+    def run_performance_test(self):
+        """Start performance test execution"""
+        # Validate inputs
+        try:
+            iterations = int(self.iterations_var.get())
+            delay = int(self.delay_var.get())
+            if not (1 <= iterations <= 10000):
+                raise ValueError("Iterations must be between 1 and 10000")
+            if not (0 <= delay <= 3600):
+                raise ValueError("Delay must be between 0 and 3600 seconds")
+        except ValueError as e:
+            messagebox.showerror("Invalid Input", str(e))
+            return
+
+        # Check certificate directory
+        cert_dir = self.perf_cert_dir.get()
+        if not cert_dir:
+            messagebox.showerror("Error", "Please select a certificate directory")
+            return
+
+        # Check required files
+        required_files = ["ca.crt", "device1.crt", "device1.key"]
+        for file in required_files:
+            if not os.path.exists(os.path.join(cert_dir, file)):
+                messagebox.showerror(
+                    "Files Not Found",
+                    f"Missing required file: {file}\n"
+                    f"Please select a directory containing the device certificates."
+                )
+                return
+
+        # Get selected ciphers
+        selected_ciphers = [
+            cipher for cipher, var in self.cipher_vars.items() 
+            if var.get()
+        ]
+        if not selected_ciphers:
+            messagebox.showerror("Error", "Please select at least one cipher suite")
+            return
+
+        # Configure test
+        tester = PerformanceTest()
+        tester.cert_dir = cert_dir
+        tester.iterations = iterations
+        tester.delay = delay
+        tester.selected_ciphers = selected_ciphers
+        tester.output_file = self.perf_output_var.get()
+
+        # Start test in separate thread
+        self.perf_progress_var.set("Test running...")
+        self.perf_progress.start()
+        self.test_thread = threading.Thread(
+            target=self._run_performance_test_thread,
+            args=(tester,),
+            daemon=True
+        )
+        self.test_thread.start()
+
+    def _run_performance_test_thread(self, tester):
+        """Run performance test in separate thread"""
+        try:
+            tester.run_test()
+            self.root.after(0, self._performance_test_completed, tester.output_file)
+        except Exception as e:
+            self.root.after(0, self._performance_test_failed, str(e))
+
+    def _performance_test_completed(self, output_file):
+        """Handle successful test completion"""
+        self.perf_progress.stop()
+        self.perf_progress_var.set("Test completed!")
+        messagebox.showinfo(
+            "Success", 
+            f"Performance test completed!\nResults saved to: {output_file}"
+        )
+
+    def _performance_test_failed(self, error):
+        """Handle test failure"""
+        self.perf_progress.stop()
+        self.perf_progress_var.set("Test failed!")
+        messagebox.showerror("Error", f"Test failed: {error}")
+
+    def cancel_performance_test(self):
+        """Cancel running performance test"""
+        if hasattr(self, 'test_thread') and self.test_thread.is_alive():
+            # Note: Proper test cancellation would require modifications to PerformanceTest
+            self.perf_progress.stop()
+            self.perf_progress_var.set("Test cancelled")
+            messagebox.showinfo("Cancelled", "Performance test cancelled")
