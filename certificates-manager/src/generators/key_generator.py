@@ -6,11 +6,14 @@ def generate_key(alg_choice, curve_choice, rsa_bits_choice, key_filename, output
     """Generates a private key. key_filename is just the name, not path."""
     print(f"\n--- Generating Private Key: {key_filename} ---")
     command = ['genpkey', '-algorithm', alg_choice]
+    
     if alg_choice == 'EC':
         command.extend(['-pkeyopt', f'ec_paramgen_curve:{curve_choice}'])
     elif alg_choice == 'RSA':
         command.extend(['-pkeyopt', f'rsa_keygen_bits:{rsa_bits_choice}'])
-    command.extend(['-out', key_filename]) # Use filename directly
+    # Ed25519 and Ed448 don't need additional parameters
+    
+    command.extend(['-out', key_filename])
     
     stdout, stderr = run_command(command, working_dir=output_dir, tool_name="openssl")
     if stderr:

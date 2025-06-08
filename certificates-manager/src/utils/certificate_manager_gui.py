@@ -14,6 +14,41 @@ import ctypes
 
 THINGSBOARD_CONF_PATH = "C:\\Program Files\\Thingsboard\\thingsboard\\conf\\certs\\test"
 
+SUPPORTED_ALGORITHMS = {
+    "RSA": {
+        "name": "RSA",
+        "key_options": {
+            "type": "bits",
+            "values": ["2048", "3072", "4096", "8192"],
+            "default": "2048"
+        }
+    },
+    "EC": {
+        "name": "EC",
+        "key_options": {
+            "type": "curve",
+            "values": None,  # Will be populated from OpenSSL
+            "default": None  # Will be set after getting curves
+        }
+    },
+    "Ed25519": {
+        "name": "Ed25519",
+        "key_options": {
+            "type": "none",
+            "values": None,
+            "default": None
+        }
+    },
+    "Ed448": {
+        "name": "Ed448",
+        "key_options": {
+            "type": "none",
+            "values": None,
+            "default": None
+        }
+    }
+}
+
 class CertificateManagerGUI:
     def __init__(self, root):
         self.root = root
@@ -74,10 +109,14 @@ class CertificateManagerGUI:
         alg_frame.pack(fill=tk.X, padx=5, pady=5)
         
         self.alg_var = tk.StringVar(value="EC")
-        ttk.Radiobutton(alg_frame, text="EC", variable=self.alg_var, 
-                       value="EC", command=self.update_key_options).pack(side=tk.LEFT, padx=5)
-        ttk.Radiobutton(alg_frame, text="RSA", variable=self.alg_var, 
-                       value="RSA", command=self.update_key_options).pack(side=tk.LEFT, padx=5)
+        for alg in SUPPORTED_ALGORITHMS.keys():
+            ttk.Radiobutton(
+                alg_frame, 
+                text=alg, 
+                variable=self.alg_var,
+                value=alg, 
+                command=self.update_key_options
+            ).pack(side=tk.LEFT, padx=5)
         
         # Key options frame
         self.key_options_frame = ttk.LabelFrame(tab, text="Key Options")
@@ -258,51 +297,66 @@ class CertificateManagerGUI:
         for widget in self.key_options_frame.winfo_children():
             widget.destroy()
         
-        if self.alg_var.get() == "EC":
-            # Get available curves
-            curves_stdout, _ = run_command(['ecparam', '-list_curves'], tool_name="openssl")
-            available_curves = parse_curves(curves_stdout)
+        selected_alg = self.alg_var.get()
+        alg_config = SUPPORTED_ALGORITHMS[selected_alg]
+        
+        if alg_config["key_options"]["type"] == "none":
+            # No options needed for this algorithm
+            ttk.Label(
+                self.key_options_frame, 
+                text="No additional options required"
+            ).pack(side=tk.LEFT, padx=5)
+            return
             
-            # Create list of curve names for display
-            curve_names = [curve['name'] for curve in available_curves]
-            curve_descriptions = {curve['name']: curve['description'] for curve in available_curves}
+        if alg_config["key_options"]["type"] == "curve":
+            # Get available curves if not already populated
+            if alg_config["key_options"]["values"] is None:
+                curves_stdout, _ = run_command(['ecparam', '-list_curves'], tool_name="openssl")
+                available_curves = parse_curves(curves_stdout)
+                alg_config["key_options"]["values"] = [curve['name'] for curve in available_curves]
+                alg_config["key_options"]["descriptions"] = {
+                    curve['name']: curve['description'] for curve in available_curves
+                }
+                alg_config["key_options"]["default"] = alg_config["key_options"]["values"][0]
             
-            self.curve_var = tk.StringVar(value=curve_names[0])
+            self.curve_var = tk.StringVar(value=alg_config["key_options"]["default"])
             ttk.Label(self.key_options_frame, text="Curve:").pack(side=tk.LEFT, padx=5)
             
-            # Create combobox with curve names only
             curve_combo = ttk.Combobox(
-                self.key_options_frame, 
+                self.key_options_frame,
                 textvariable=self.curve_var,
-                values=curve_names,
+                values=alg_config["key_options"]["values"],
                 width=40
             )
             curve_combo.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
             
-            # Add tooltip or description label
+            # Add curve description
             self.curve_desc_var = tk.StringVar()
             ttk.Label(
-                self.key_options_frame, 
+                self.key_options_frame,
                 textvariable=self.curve_desc_var
             ).pack(side=tk.LEFT, padx=5)
             
-            # Update description when curve changes
             def on_curve_select(event):
                 selected = curve_combo.get()
-                if selected in curve_descriptions:
-                    self.curve_desc_var.set(f"({curve_descriptions[selected]})")
+                if selected in alg_config["key_options"]["descriptions"]:
+                    self.curve_desc_var.set(
+                        f"({alg_config['key_options']['descriptions'][selected]})"
+                    )
             
             curve_combo.bind('<<ComboboxSelected>>', on_curve_select)
             # Show initial description
-            self.curve_desc_var.set(f"({curve_descriptions[curve_names[0]]})")
-        else:
-            # RSA options remain the same
-            self.rsa_bits_var = tk.StringVar(value="2048")
-            ttk.Label(self.key_options_frame, text="RSA Bits:").pack(side=tk.LEFT, padx=5)
+            self.curve_desc_var.set(
+                f"({alg_config['key_options']['descriptions'][alg_config['key_options']['default']]}"
+            )
+            
+        elif alg_config["key_options"]["type"] == "bits":
+            self.rsa_bits_var = tk.StringVar(value=alg_config["key_options"]["default"])
+            ttk.Label(self.key_options_frame, text="Key Size:").pack(side=tk.LEFT, padx=5)
             bits_combo = ttk.Combobox(
-                self.key_options_frame, 
+                self.key_options_frame,
                 textvariable=self.rsa_bits_var,
-                values=["2048", "3072", "4096"]
+                values=alg_config["key_options"]["values"]
             )
             bits_combo.pack(side=tk.LEFT, padx=5)
 
