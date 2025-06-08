@@ -9,12 +9,20 @@ from ..utils.thingsboard_device import ThingsboardDeviceManager
 
 class PerformanceTest:
     AVAILABLE_CIPHERS = {
+        # ECDSA ciphers
         "ECDHE-ECDSA-AES128-GCM-SHA256": "ECC with AES-128-GCM",
         "ECDHE-ECDSA-AES256-GCM-SHA384": "ECC with AES-256-GCM",
         "ECDHE-ECDSA-CHACHA20-POLY1305": "ECC with ChaCha20-Poly1305",
+        
+        # RSA ciphers
         "ECDHE-RSA-AES128-GCM-SHA256": "RSA with AES-128-GCM",
-        "ECDHE-RSA-AES256-GCM-SHA384": "RSA with AES-256-GCM",
-        "ECDHE-RSA-CHACHA20-POLY1305": "RSA with ChaCha20-Poly1305"
+        "ECDHE-RSA-AES256-GCM-SHA384": "RSA with AES-256-GCM", 
+        "ECDHE-RSA-CHACHA20-POLY1305": "RSA with ChaCha20-Poly1305",
+        
+        # Ed25519/Ed448 ciphers
+        "AEAD-AES128-CCM": "EdDSA with AES-128-CCM",
+        "AEAD-AES256-CCM": "EdDSA with AES-256-CCM",
+        "AEAD-CHACHA20-POLY1305": "EdDSA with ChaCha20-Poly1305"
     }
 
     def __init__(self):

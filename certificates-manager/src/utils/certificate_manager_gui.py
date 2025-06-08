@@ -220,6 +220,10 @@ class CertificateManagerGUI:
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="Performance Testing")
         
+        # Initialize cipher variables
+        self.cipher_vars = {}
+        self.cipher_checkboxes = {}
+        
         # Test configuration
         config_frame = ttk.LabelFrame(tab, text="Test Configuration")
         config_frame.pack(fill=tk.X, padx=5, pady=5)
@@ -231,8 +235,17 @@ class CertificateManagerGUI:
         ttk.Label(dir_frame, text="Certificate Directory:").pack(side=tk.LEFT)
         self.perf_cert_dir = tk.StringVar()
         ttk.Entry(dir_frame, textvariable=self.perf_cert_dir).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
-        ttk.Button(dir_frame, text="Browse", 
-                  command=lambda: self.browse_directory(self.perf_cert_dir)).pack(side=tk.RIGHT)
+        
+        # Create browse button with compatibility check
+        dir_button = ttk.Button(
+            dir_frame, 
+            text="Browse",
+            command=lambda: [
+                self.browse_directory(self.perf_cert_dir),
+                check_certificate_compatibility()
+            ]
+        )
+        dir_button.pack(side=tk.RIGHT)
 
         # Test Parameters
         param_frame = ttk.LabelFrame(config_frame, text="Test Parameters")
@@ -274,8 +287,50 @@ class CertificateManagerGUI:
         for i in range(3):  # 3 columns
             checkbox_frame.grid_columnconfigure(i, weight=1)
 
+        def check_certificate_compatibility():
+            """Check which ciphers are compatible with the selected certificates"""
+            cert_dir = self.perf_cert_dir.get()
+            if not cert_dir:
+                return
+                
+            device_cert_path = os.path.join(cert_dir, "device1.crt")
+            if not os.path.exists(device_cert_path):
+                return
+                
+            # Get certificate info using OpenSSL
+            cmd = ['x509', '-in', device_cert_path, '-text', '-noout']
+            stdout, _ = run_command(cmd, tool_name="openssl")
+            
+            # Determine certificate type
+            is_rsa = "Public Key Algorithm: rsaEncryption" in stdout
+            is_ecdsa = "Public Key Algorithm: id-ecPublicKey" in stdout
+            is_ed25519 = "Public Key Algorithm: ED25519" in stdout
+            is_ed448 = "Public Key Algorithm: ED448" in stdout
+            
+            # Enable/disable cipher checkboxes based on certificate type
+            for cipher, var in self.cipher_vars.items():
+                if is_rsa:
+                    compatible = "ECDHE-RSA" in cipher
+                elif is_ecdsa:
+                    compatible = "ECDHE-ECDSA" in cipher
+                elif is_ed25519 or is_ed448:
+                    compatible = cipher.startswith("AEAD")  # Use AEAD ciphers for EdDSA
+                else:
+                    compatible = False
+                    
+                # Update checkbox state
+                checkbox = self.cipher_checkboxes[cipher]
+                if compatible:
+                    checkbox.configure(state='normal')
+                    var.set(True)
+                else:
+                    checkbox.configure(state='disabled')
+                    var.set(False)
+
+        # Store checkbox references
+        self.cipher_checkboxes = {}
+        
         # Create checkboxes for each cipher
-        self.cipher_vars = {}
         for i, (cipher, description) in enumerate(PerformanceTest.AVAILABLE_CIPHERS.items()):
             var = tk.BooleanVar(value=True)
             self.cipher_vars[cipher] = var
@@ -292,6 +347,9 @@ class CertificateManagerGUI:
                 justify=tk.LEFT
             )
             cb.grid(row=row, column=col, sticky='w', padx=5, pady=2)
+            
+            # Store checkbox reference 
+            self.cipher_checkboxes[cipher] = cb
         
         # Output File
         output_frame = ttk.Frame(tab)
