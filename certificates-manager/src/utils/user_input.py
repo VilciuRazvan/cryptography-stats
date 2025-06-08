@@ -64,3 +64,22 @@ def get_password_with_confirmation(prompt):
         if password == confirm and password:
             return password
         print("Passwords do not match or empty. Please try again.")
+
+def fuzzy_search(search_term, text):
+    """Simple fuzzy search implementation"""
+    search_term = search_term.lower()
+    text = text.lower()
+    
+    # Direct match
+    if search_term in text:
+        return True
+        
+    # Character sequence matching
+    j = 0
+    for char in search_term:
+        while j < len(text) and text[j] != char:
+            j += 1
+        if j >= len(text):
+            return False
+        j += 1
+    return True

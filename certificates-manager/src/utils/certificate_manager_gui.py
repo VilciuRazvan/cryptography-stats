@@ -8,6 +8,7 @@ from ..generators.key_generator import generate_key, parse_curves
 from ..generators.cert_generator import generate_ca_certificate, generate_signed_certificate
 from ..generators.store_generator import generate_pkcs12_file, create_server_keystore, create_truststore
 from ..utils.command_runner import run_command
+from ..utils.user_input import fuzzy_search
 import os
 import shutil
 import ctypes
@@ -326,38 +327,77 @@ class CertificateManagerGUI:
                     curve['name']: curve['description'] for curve in available_curves
                 }
                 alg_config["key_options"]["default"] = alg_config["key_options"]["values"][0]
-            
+        
+            # Create curve selection frame
+            curve_frame = ttk.Frame(self.key_options_frame)
+            curve_frame.pack(fill=tk.X, padx=5)
+        
+            ttk.Label(curve_frame, text="Curve:").pack(side=tk.LEFT)
+        
+            # Store all curves for searching
+            self.all_curves = alg_config["key_options"]["values"]
             self.curve_var = tk.StringVar(value=alg_config["key_options"]["default"])
-            ttk.Label(self.key_options_frame, text="Curve:").pack(side=tk.LEFT, padx=5)
-            
+        
+            # Create combobox with search capability
             curve_combo = ttk.Combobox(
-                self.key_options_frame,
+                curve_frame,
                 textvariable=self.curve_var,
-                values=alg_config["key_options"]["values"],
+                values=self.all_curves,
                 width=40
             )
             curve_combo.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
-            
+
             # Add curve description
             self.curve_desc_var = tk.StringVar()
             ttk.Label(
-                self.key_options_frame,
+                curve_frame,
                 textvariable=self.curve_desc_var
             ).pack(side=tk.LEFT, padx=5)
-            
-            def on_curve_select(event):
-                selected = curve_combo.get()
-                if selected in alg_config["key_options"]["descriptions"]:
+
+            def filter_curves(*args):
+                """Filter curves based on current text"""
+                search_term = curve_combo.get()
+                
+                # Filter curves based on search term
+                filtered_curves = [
+                    curve for curve in self.all_curves
+                    if fuzzy_search(search_term, curve) or 
+                    fuzzy_search(search_term, alg_config["key_options"]["descriptions"][curve])
+                ]
+                
+                # Update dropdown list
+                curve_combo['values'] = filtered_curves
+                
+                # Show dropdown and update description
+                if filtered_curves:
+                    if not curve_combo.winfo_ismapped():
+                        curve_combo.event_generate('<Down>')
+                    # Update description if exact match found
+                    if search_term in alg_config["key_options"]["descriptions"]:
+                        self.curve_desc_var.set(
+                            f"({alg_config['key_options']['descriptions'][search_term]})"
+                        )
+
+            def on_key_release(event):
+                """Handle key release events"""
+                if event.keysym not in ('Up', 'Down', 'Return', 'Escape'):
+                    filter_curves()
+
+            def on_curve_select(event=None):
+                """Handle curve selection"""
+                current = curve_combo.get()
+                if current in alg_config["key_options"]["descriptions"]:
                     self.curve_desc_var.set(
-                        f"({alg_config['key_options']['descriptions'][selected]})"
+                        f"({alg_config['key_options']['descriptions'][current]})"
                     )
-            
+
+            # Bind events
+            curve_combo.bind('<KeyRelease>', on_key_release)
             curve_combo.bind('<<ComboboxSelected>>', on_curve_select)
-            # Show initial description
-            self.curve_desc_var.set(
-                f"({alg_config['key_options']['descriptions'][alg_config['key_options']['default']]}"
-            )
             
+            # Show initial description
+            on_curve_select()
+
         elif alg_config["key_options"]["type"] == "bits":
             self.rsa_bits_var = tk.StringVar(value=alg_config["key_options"]["default"])
             ttk.Label(self.key_options_frame, text="Key Size:").pack(side=tk.LEFT, padx=5)
