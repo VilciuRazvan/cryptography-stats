@@ -253,6 +253,14 @@ class CertificateManagerGUI:
         ttk.Entry(delay_frame, textvariable=self.delay_var, width=10).pack(side=tk.LEFT, padx=5)
         ttk.Label(delay_frame, text="(0-3600)").pack(side=tk.LEFT)
         
+        # Payload Size
+        payload_frame = ttk.Frame(param_frame)
+        payload_frame.pack(fill=tk.X, pady=2)
+        ttk.Label(payload_frame, text="Payload size (KB):").pack(side=tk.LEFT)
+        self.payload_var = tk.StringVar(value="60")
+        ttk.Entry(payload_frame, textvariable=self.payload_var, width=10).pack(side=tk.LEFT, padx=5)
+        ttk.Label(payload_frame, text="(1-64)").pack(side=tk.LEFT)
+        
         # Cipher Selection
         cipher_frame = ttk.LabelFrame(tab, text="Cipher Suites")
         cipher_frame.pack(fill=tk.BOTH, expand=True, pady=5)
@@ -750,10 +758,15 @@ class CertificateManagerGUI:
         try:
             iterations = int(self.iterations_var.get())
             delay = int(self.delay_var.get())
+            payload_size = int(self.payload_var.get())
+            
             if not (1 <= iterations <= 10000):
                 raise ValueError("Iterations must be between 1 and 10000")
             if not (0 <= delay <= 3600):
                 raise ValueError("Delay must be between 0 and 3600 seconds")
+            if not (1 <= payload_size <= 64):
+                raise ValueError("Payload size must be between 1 and 64 KB")
+                
         except ValueError as e:
             messagebox.showerror("Invalid Input", str(e))
             return
@@ -792,6 +805,7 @@ class CertificateManagerGUI:
         tester.cert_dir = cert_dir
         tester.iterations = iterations
         tester.delay = delay
+        tester.payload_size = payload_size * 1024  # Convert KB to bytes
         tester.selected_ciphers = selected_ciphers
         tester.output_file = self.perf_output_var.get()
 
@@ -833,7 +847,8 @@ class CertificateManagerGUI:
                     ca_certs=os.path.join(tester.cert_dir, "ca.crt"),
                     certfile=os.path.join(tester.cert_dir, "device1.crt"),
                     keyfile=os.path.join(tester.cert_dir, "device1.key"),
-                    ciphers=cipher
+                    ciphers=cipher,
+                    payload_size=tester.payload_size
                 )
                 test_configs[config_name] = config
 

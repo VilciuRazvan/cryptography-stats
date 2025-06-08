@@ -23,6 +23,7 @@ class MqttTestConfig:
     clientId: Optional[str] = None
     username: Optional[str] = None
     password: Optional[str] = None
+    payload_size: Optional[int] = 60000
 
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 
@@ -244,12 +245,12 @@ def run_mqtt_test(iteration, config_name, client_config):
     # --- Publish Phase (only if connected successfully) ---
     if connected and not state.error:
         try:
-            large_string = "X" * 60000 # Create a string of 'X' characters
-            # large_string = "X" * 1 # Create a string of 'X' characters
+            payload_size = client_config.get("payload_size", 60000)  # Default to 60KB if not specified
+            large_string = "X" * payload_size
             message_content = {
                 "data": large_string,
                 "status": "Testing large payload"
-                }
+            }
             payload = json.dumps(message_content)
             print(f"  Payload size: {len(payload)} bytes") # Optional: print size
 
