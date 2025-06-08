@@ -275,17 +275,32 @@ class CertificateManagerGUI:
         ttk.Entry(payload_frame, textvariable=self.payload_var, width=10).pack(side=tk.LEFT, padx=5)
         ttk.Label(payload_frame, text="(1-64)").pack(side=tk.LEFT)
         
-        # Cipher Selection
+        # Cipher Selection with scrollbar
         cipher_frame = ttk.LabelFrame(tab, text="Cipher Suites")
         cipher_frame.pack(fill=tk.BOTH, expand=True, pady=5)
-        
-        # Create checkboxes container with grid configuration
-        checkbox_frame = ttk.Frame(cipher_frame)
-        checkbox_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        # Configure grid columns to be equal width
+        # Create canvas and scrollbar
+        canvas = tk.Canvas(cipher_frame)
+        scrollbar = ttk.Scrollbar(cipher_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+
+        # Configure scrolling
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        # Create window in canvas
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Pack scrollbar and canvas
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+
+        # Configure grid columns in scrollable frame
         for i in range(3):  # 3 columns
-            checkbox_frame.grid_columnconfigure(i, weight=1)
+            scrollable_frame.grid_columnconfigure(i, weight=1)
 
         def check_certificate_compatibility():
             """Check which ciphers are compatible with the selected certificates"""
@@ -293,12 +308,111 @@ class CertificateManagerGUI:
             if not cert_dir:
                 return
                 
+            # Clear existing checkboxes
+            for widget in scrollable_frame.winfo_children():
+                widget.destroy()
+            
+            # Get certificate type
             device_cert_path = os.path.join(cert_dir, "device1.crt")
-            if not os.path.exists(device_cert_path):
-                return
-                
-            # Get certificate info using OpenSSL
             cmd = ['x509', '-in', device_cert_path, '-text', '-noout']
+            stdout, stderr = run_command(cmd, tool_name="openssl")
+            
+            if stderr:
+                messagebox.showerror("Error", f"Failed to read certificate: {stderr}")
+                return
+
+            # Sort ciphers into compatible and incompatible
+            compatible_ciphers, incompatible_ciphers = sort_ciphers_by_compatibility(cert_dir, available_ciphers)
+            
+            # Create checkboxes for compatible ciphers first
+            row = 0
+            col = 0
+            for cipher, description in compatible_ciphers.items():
+                var = tk.BooleanVar(value=True)
+                self.cipher_vars[cipher] = var
+                
+                cb = tk.Checkbutton(
+                    scrollable_frame, 
+                    text=f"{cipher}\n({description})", 
+                    variable=var,
+                    wraplength=250,
+                    justify=tk.LEFT
+                )
+                cb.grid(row=row, column=col, sticky='w', padx=5, pady=2)
+                self.cipher_checkboxes[cipher] = cb
+                
+                col += 1
+                if col >= 3:
+                    col = 0
+                    row += 1
+
+            # Add separator if we have both compatible and incompatible ciphers
+            if incompatible_ciphers:
+                ttk.Separator(scrollable_frame, orient='horizontal').grid(
+                    row=row, column=0, columnspan=3, sticky='ew', pady=10
+                )
+                row += 1
+                col = 0
+
+            # Then add incompatible ciphers
+            for cipher, description in incompatible_ciphers.items():
+                var = tk.BooleanVar(value=False)
+                self.cipher_vars[cipher] = var
+                
+                cb = tk.Checkbutton(
+                    scrollable_frame, 
+                    text=f"{cipher}\n({description})", 
+                    variable=var,
+                    wraplength=250,
+                    justify=tk.LEFT,
+                    state='disabled'
+                )
+                cb.grid(row=row, column=col, sticky='w', padx=5, pady=2)
+                self.cipher_checkboxes[cipher] = cb
+                
+                col += 1
+                if col >= 3:
+                    col = 0
+                    row += 1
+
+        # Store checkbox references
+        self.cipher_checkboxes = {}
+        
+        # Get available ciphers from OpenSSL
+        cmd = ['ciphers', '-v', 'ALL']
+        stdout, stderr = run_command(cmd, tool_name="openssl")
+        
+        if stderr:
+            messagebox.showerror("Error", f"Failed to get cipher list: {stderr}")
+            return
+            
+        available_ciphers = {}
+        for line in stdout.strip().split('\n'):
+            if line.strip():
+                parts = line.strip().split()
+                if len(parts) >= 6:
+                    cipher_name = parts[0]
+                    protocol = parts[1]    # e.g., TLSv1.2
+                    key_exchange = parts[2] # e.g., Kx=ECDH
+                    auth = parts[3]        # e.g., Au=ECDSA
+                    encryption = parts[4]   # e.g., Enc=AESGCM(256)
+                    mac = parts[5]         # e.g., Mac=AEAD
+                    
+                    description = f"{protocol} with {encryption}"
+                    available_ciphers[cipher_name] = description
+
+        # Sort ciphers by compatibility
+        def sort_ciphers_by_compatibility(cert_dir, available_ciphers):
+            """Sort ciphers into compatible and incompatible based on certificate type"""
+            compatible = {}
+            incompatible = {}
+            
+            # Get certificate type
+            cert_path = os.path.join(cert_dir, "device1.crt")
+            if not os.path.exists(cert_path):
+                return available_ciphers, {}  # Return all as compatible if no certificate
+                
+            cmd = ['x509', '-in', cert_path, '-text', '-noout']
             stdout, _ = run_command(cmd, tool_name="openssl")
             
             # Determine certificate type
@@ -307,69 +421,96 @@ class CertificateManagerGUI:
             is_ed25519 = "Public Key Algorithm: ED25519" in stdout
             is_ed448 = "Public Key Algorithm: ED448" in stdout
             
-            # Enable/disable cipher checkboxes based on certificate type
-            for cipher, var in self.cipher_vars.items():
-                if is_rsa:
-                    compatible = "ECDHE-RSA" in cipher
-                elif is_ecdsa:
-                    compatible = "ECDHE-ECDSA" in cipher
-                elif is_ed25519 or is_ed448:
-                    compatible = cipher.startswith("AEAD")  # Use AEAD ciphers for EdDSA
+            # Sort ciphers
+            for cipher, description in available_ciphers.items():
+                if (is_rsa and "RSA" in cipher) or \
+                   (is_ecdsa and "ECDSA" in cipher) or \
+                   ((is_ed25519 or is_ed448) and any(c in cipher for c in ["TLS_AES", "TLS_CHACHA20"])):
+                    compatible[cipher] = description
                 else:
-                    compatible = False
+                    incompatible[cipher] = description
                     
-                # Update checkbox state
-                checkbox = self.cipher_checkboxes[cipher]
-                if compatible:
-                    checkbox.configure(state='normal')
-                    var.set(True)
-                else:
-                    checkbox.configure(state='disabled')
-                    var.set(False)
+            return compatible, incompatible
 
-        # Store checkbox references
-        self.cipher_checkboxes = {}
-        
-        # Create checkboxes for each cipher
-        for i, (cipher, description) in enumerate(PerformanceTest.AVAILABLE_CIPHERS.items()):
+        # Sort ciphers if directory is selected
+        cert_dir = self.perf_cert_dir.get()
+        if cert_dir:
+            compatible_ciphers, incompatible_ciphers = sort_ciphers_by_compatibility(cert_dir, available_ciphers)
+        else:
+            compatible_ciphers, incompatible_ciphers = available_ciphers, {}
+
+        # Create checkboxes for compatible ciphers first
+        row = 0
+        col = 0
+        for cipher, description in compatible_ciphers.items():
             var = tk.BooleanVar(value=True)
             self.cipher_vars[cipher] = var
             
-            # Calculate row and column
-            row, col = divmod(i, 3)
-            
-            # Create checkbox with multiline text
             cb = tk.Checkbutton(
-                checkbox_frame, 
+                scrollable_frame, 
                 text=f"{cipher}\n({description})", 
                 variable=var,
                 wraplength=250,
                 justify=tk.LEFT
             )
             cb.grid(row=row, column=col, sticky='w', padx=5, pady=2)
-            
-            # Store checkbox reference 
             self.cipher_checkboxes[cipher] = cb
-        
-        # Output File
+            
+            col += 1
+            if col >= 3:
+                col = 0
+                row += 1
+
+        # Add separator if we have both compatible and incompatible ciphers
+        if incompatible_ciphers:
+            ttk.Separator(scrollable_frame, orient='horizontal').grid(
+                row=row, column=0, columnspan=3, sticky='ew', pady=10
+            )
+            row += 1
+            col = 0
+
+        # Then add incompatible ciphers
+        for cipher, description in incompatible_ciphers.items():
+            var = tk.BooleanVar(value=False)
+            self.cipher_vars[cipher] = var
+            
+            cb = tk.Checkbutton(
+                scrollable_frame, 
+                text=f"{cipher}\n({description})", 
+                variable=var,
+                wraplength=250,
+                justify=tk.LEFT,
+                state='disabled'
+            )
+            cb.grid(row=row, column=col, sticky='w', padx=5, pady=2)
+            self.cipher_checkboxes[cipher] = cb
+            
+            col += 1
+            if col >= 3:
+                col = 0
+                row += 1
+
+        # Add mousewheel scrolling
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+        # Output file
         output_frame = ttk.Frame(tab)
-        output_frame.pack(fill=tk.X, pady=5)
-        ttk.Label(output_frame, text="Output Excel File:").pack(side=tk.LEFT)
+        output_frame.pack(fill=tk.X, padx=5, pady=5)
+        ttk.Label(output_frame, text="Output File:").pack(side=tk.LEFT)
         self.perf_output_var = tk.StringVar(value="performance_results.xlsx")
         ttk.Entry(output_frame, textvariable=self.perf_output_var).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
-        
+
         # Control buttons
         button_frame = ttk.Frame(tab)
-        button_frame.pack(fill=tk.X, pady=10)
-        
-        ttk.Button(button_frame, text="Start Test", 
-                   command=self.run_performance_test).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Cancel Test", 
-                   command=self.cancel_performance_test).pack(side=tk.LEFT, padx=5)
-        
+        button_frame.pack(fill=tk.X, padx=5, pady=5)
+        ttk.Button(button_frame, text="Start Test", command=self.run_performance_test).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Cancel Test", command=self.cancel_performance_test).pack(side=tk.LEFT, padx=5)
+
         # Progress
         self.perf_progress_var = tk.StringVar(value="Ready")
-        ttk.Label(tab, textvariable=self.perf_progress_var).pack()
+        ttk.Label(tab, textvariable=self.perf_progress_var).pack(padx=5)
         self.perf_progress = ttk.Progressbar(tab, mode='determinate')
         self.perf_progress.pack(fill=tk.X, padx=5, pady=5)
 
