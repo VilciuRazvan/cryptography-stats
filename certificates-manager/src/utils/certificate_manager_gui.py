@@ -54,7 +54,7 @@ class CertificateManagerGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Certificate Management Utility")
-        self.root.geometry("1024x768")
+        self.root.geometry("900x700")
         
         # Create notebook for tabs
         self.notebook = ttk.Notebook(root)
@@ -266,17 +266,32 @@ class CertificateManagerGUI:
         cipher_frame = ttk.LabelFrame(tab, text="Cipher Suites")
         cipher_frame.pack(fill=tk.BOTH, expand=True, pady=5)
         
+        # Create checkboxes container with grid configuration
+        checkbox_frame = ttk.Frame(cipher_frame)
+        checkbox_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        # Configure grid columns to be equal width
+        for i in range(3):  # 3 columns
+            checkbox_frame.grid_columnconfigure(i, weight=1)
+
         # Create checkboxes for each cipher
         self.cipher_vars = {}
-        for cipher, description in PerformanceTest.AVAILABLE_CIPHERS.items():
+        for i, (cipher, description) in enumerate(PerformanceTest.AVAILABLE_CIPHERS.items()):
             var = tk.BooleanVar(value=True)
             self.cipher_vars[cipher] = var
-            tk.Checkbutton(
-                cipher_frame, 
+            
+            # Calculate row and column
+            row, col = divmod(i, 3)
+            
+            # Create checkbox with multiline text
+            cb = tk.Checkbutton(
+                checkbox_frame, 
                 text=f"{cipher}\n({description})", 
                 variable=var,
-                wraplength=400
-            ).pack(anchor=tk.W, padx=5, pady=2)
+                wraplength=250,
+                justify=tk.LEFT
+            )
+            cb.grid(row=row, column=col, sticky='w', padx=5, pady=2)
         
         # Output File
         output_frame = ttk.Frame(tab)
